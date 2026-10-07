@@ -1,20 +1,15 @@
 # Controle de Obra
+Gestão financeira de obras (MVP v1).
 
-Sistema de gestão financeira de obras (MVP v1). Sem dependências: só Python 3.8+.
-
-## Executar
-    python3 server.py        # http://localhost:8000  (outra porta: python3 server.py 8080)
-
-O banco SQLite `data/obra.db` é criado vazio no primeiro uso. Comece pela aba **Obra**.
+- **Produção (Vercel + Postgres + login):** veja `DEPLOY.md`
+- **Local:** `python3 server.py` → http://localhost:8000 (SQLite em `data/obra.db`)
 
 ## Estrutura
-    server.py                  servidor HTTP + API REST + SQLite
-    data/obra.db               banco de dados (gerado automaticamente)
-    public/index.html          estrutura da página
-    public/css/style.css       estilos
-    public/js/app.js           interface, painel, histórico e importação de CSV
-    docs/documentacao.pdf      documentação completa
-    exemplo_importacao.csv     exemplo para importar
-
-## Importar dados
-Aba **Importar**: escolha um CSV (obrigatórias: item, quantidade, valor unitário; opcionais: data, categoria, comportamento, unidade, observação). O mapeamento de colunas pode ser ajustado antes de confirmar.
+    api/index.py         função serverless da Vercel (rota /api/*)
+    api/_core.py         regras de negócio, banco (Postgres/SQLite) e autenticação
+    server.py            servidor local
+    public/              index.html, css/style.css, js/app.js
+    vercel.json          configuração da Vercel
+    requirements.txt     dependência de produção (psycopg)
+    docs/documentacao.pdf  documentação completa
+    exemplo_importacao.csv exemplo para a aba Importar

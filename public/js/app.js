@@ -1,11 +1,11 @@
 
-let S,armed=null,edit=null,det=null,tt,tab='p',flt={q:'',i:'',c:'',p:'',d:'',a:''};
+let PROT=false,S,armed=null,edit=null,det=null,tt,tab='p',flt={q:'',i:'',c:'',p:'',d:'',a:''};
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const R=n=>n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}),P=n=>n.toFixed(2).replace('.',',')+'%',num=v=>{v=String(v).trim();return parseFloat(v.includes(',')?v.replace(/\./g,'').replace(',','.'):v)};
 const nk=s=>s.trim().replace(/\s+/g,' ').toLowerCase(),cap=s=>{s=s.trim().replace(/\s+/g,' ');return s.charAt(0).toUpperCase()+s.slice(1)};
 const T=g=>Math.round(g.q*g.v*100)/100,$=id=>document.getElementById(id);
 const calc=(o,m,v)=>{const t=Math.round(v.reduce((a,b)=>a+b,0)*100)/100;return{t,sd:o-t,po:o?t/o*100:0,rm:m==null?null:m-t,pm:m?t/m*100:null}};
-async function api(m,u,b){const r=await fetch('/api/'+u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined}),j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.erro||'Erro');return j}
+async function api(m,u,b){const r=await fetch('/api/'+u,{method:m,headers:{'Content-Type':'application/json'},body:b?JSON.stringify(b):undefined}),j=await r.json().catch(()=>({}));if(r.status===401){showLogin();throw new Error('Sessão expirada')}if(!r.ok)throw new Error(j.erro||'Erro');return j}
 async function load(){const d=await api('GET','state'),o=d.obra,ids={};S={obra:{nome:o.nome,orc:o.orcamento,meta:o.meta,ini:o.inicio||'',fim:o.fim||'',st:o.status,alem:!!o.meta_alem},cats:d.categorias.map(c=>({id:c.id,nome:c.nome,ativo:!!c.ativo})),itens:{},gastos:[]};
 d.itens.forEach(i=>{const k=nk(i.nome);ids[i.id]=k;S.itens[k]={id:i.id,nome:i.nome,cat:i.categoria_id||0,comp:i.comportamento||'',un:i.unidade||'',ativo:!!i.ativo}});
 S.gastos=d.gastos.map(g=>({id:g.id,k:ids[g.item_id],q:g.quantidade,v:g.valor_unitario,dt:g.data||'',obs:g.observacao||'',orig:g.origem,ln:g.origem==='manual'?0:1}))}
@@ -68,11 +68,11 @@ function obra(){const o=S.obra;$('o').innerHTML=`<div class="c"><h2>Dados da obr
 <div><label>Início</label><input id="obi" type="date" value="${o.ini}"></div><div><label>Previsão de conclusão</label><input id="obf" type="date" value="${o.fim}"></div><div><label>Status</label><select id="obs">${opts([['Planejada','Planejada'],['Em andamento','Em andamento'],['Pausada','Pausada'],['Concluída','Concluída']],o.st,'Não informado')}</select></div></div>
 <label class="sub" style="display:block;margin:10px 0"><input type="checkbox" id="oba" ${o.alem?'checked':''}> Permitir meta acima do orçamento</label><button class="p" onclick="saveO()">Salvar obra</button><div class="sub bad" id="eo"></div></div>
 <div class="c"><h2>Testes dos cálculos financeiros</h2>${tests().map(([n,ok])=>`<div class="sub"><span class="${ok?'ok':'bad'}">${ok?'✓':'✗'}</span> ${n}</div>`).join('')}</div>
-<div class="c"><h2>Dados</h2><div class="sub" style="margin-bottom:8px">Os dados ficam no banco SQLite (data/obra.db). Apagar remove obra, itens, categorias e gastos.</div><button id="rb" onclick="rst()">Apagar todos os dados</button></div>`}
+<div class="c"><h2>Dados</h2><div class="sub" style="margin-bottom:8px">Os dados ficam no banco de dados do servidor. Apagar remove obra, itens, categorias e gastos.</div><button id="rb" onclick="rst()">Apagar todos os dados</button></div>`}
 async function saveO(){try{await api('PUT','obra',{nome:obn.value,orcamento:num(obo.value),meta:obm.value.trim()===''?null:num(obm.value),inicio:obi.value,fim:obf.value,status:obs.value,meta_alem:oba.checked});await load();draw();toast('Obra salva.')}catch(x){fail('eo')(x)}}
 async function rst(){const b=$('rb');if(b.dataset.a!=='1'){b.dataset.a='1';b.textContent='Confirmar? Apaga tudo';return}await api('POST','reset');edit=null;IM=null;await load();draw();go('o');toast('Sistema zerado.')}
 function draw(){panel();gastos();itens();cats();obra();imp();
-$('note').textContent='Dados armazenados em SQLite local. Alerta “próximo do limite” a partir de 90% do orçamento ou da meta.'}
+$('note').innerHTML='Dados salvos no banco de dados do servidor. Alerta “próximo do limite” a partir de 90% do orçamento ou da meta.'+(PROT?' · <a href="#" onclick="sair();return false" style="color:var(--acc)">Sair</a>':'')}
 // ---- Importação de CSV ----
 let IM=null,IMR='';
 const CAMPOS=[['item','Item *',/item|descri|material|produto|nome/i],['quantidade','Quantidade *',/quant|qtd|qtde/i],['valor_unitario','Valor unitário *',/unit|pre[cç]o|^valor$/i],['data','Data',/data|date/i],['categoria','Categoria',/categ/i],['comportamento','Comportamento',/comport|recorr/i],['unidade','Unidade',/unid/i],['observacao','Observação',/obs/i]];
@@ -89,4 +89,7 @@ async function doImp(){const r=await api('POST','import',{arquivo:IM.nome,linhas
 function imp(){$('m').innerHTML=`<div class="c"><h2>Importar CSV</h2><div class="sub" style="margin-bottom:8px">Alimente o sistema com dados externos. Obrigatórias: item, quantidade e valor unitário. Opcionais: data, categoria, comportamento, unidade, observação. Separador ; , ou tab; números 1.234,56 ou 1234.56; datas AAAA-MM-DD ou DD/MM/AAAA. Linhas sem data entram como “sem data”.</div><input type="file" accept=".csv,.txt" onchange="lerCSV(this.files[0])"> <a href="/api/export" style="color:var(--acc);margin-left:10px">Exportar histórico (CSV)</a>${IMR?`<p class="ok">${esc(IMR)}</p>`:''}
 ${IM?`<h2 style="margin-top:14px">Mapeamento de colunas — ${esc(IM.nome)}</h2><div class="f">${CAMPOS.map(([k,l])=>`<div><label>${l}</label><select onchange="IM.map['${k}']=this.value===''?-1:+this.value;prev()">${opts(IM.hdr.map((h,i)=>[i,h||'(coluna '+(i+1)+')']),IM.map[k],'— não usar —')}</select></div>`).join('')}</div><div id="ip"></div>`:''}</div>`;prev()}
 document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>go(b.dataset.t));
-load().then(()=>{draw();if(!S.obra.orc)go('o')}).catch(()=>{document.body.innerHTML='<div class="w"><h1>Servidor indisponível</h1><p>Execute <code>python3 server.py</code> na pasta do projeto e abra http://localhost:8000</p></div>'});
+function showLogin(){document.body.innerHTML=`<div class="w" style="max-width:360px;padding-top:12vh"><div class="c"><h1 style="margin-bottom:10px">Controle de Obra</h1><p class="sub">Informe a senha de acesso.</p><input id="pw" type="password" placeholder="Senha" style="width:100%;margin-bottom:10px" onkeydown="if(event.key==='Enter')entrar()"><button class="p" style="width:100%" onclick="entrar()">Entrar</button><div class="sub bad" id="lge"></div></div></div>`;$('pw').focus()}
+async function entrar(){const r=await fetch('/api/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({senha:$('pw').value})}),j=await r.json().catch(()=>({}));if(r.ok)location.reload();else $('lge').textContent=j.erro||'Erro'}
+async function sair(){await api('POST','logout');location.reload()}
+(async()=>{try{const s=await api('GET','session');PROT=s.protegido;if(PROT&&!s.auth)return showLogin();await load();draw();if(!S.obra.orc)go('o')}catch(e){if(e.message!=='Sessão expirada')document.body.innerHTML='<div class="w"><h1>Servidor indisponível</h1><p>'+esc(e.message)+'</p></div>'}})();
